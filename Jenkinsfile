@@ -5,38 +5,57 @@ pipeline {
         stage('Checkout') {
             steps {
                 checkout scm
-                echo 'Repository cloned successfully.'
             }
         }
         
-        stage('SonarQube Security Scan') {
+        stage('Initial SonarQube Scan') {
             steps {
-                echo 'Initializing SonarScanner...'
-                sh '''
-                # Check if the AI has applied the parameterized query fix (?)
-                if grep -q "WHERE username = ?" user_auth.py; then
-                    echo "[INFO] Analyzing user_auth.py..."
-                    echo "[INFO] Sensor Python Sensor [python]"
-                    echo "[INFO] 1 source file to be analyzed"
-                    echo "[INFO] 0 Critical Vulnerabilities found."
-                    echo "[INFO] ------------------------------------------------------------------------"
-                    echo "[INFO] EXECUTION SUCCESS"
-                    echo "[INFO] ------------------------------------------------------------------------"
-                    echo "[INFO] QUALITY GATE STATUS: PASSED"
-                    exit 0
-                else
-                    echo "[INFO] Analyzing user_auth.py..."
-                    echo "[INFO] Sensor Python Sensor [python]"
-                    echo "[INFO] 1 source file to be analyzed"
-                    echo "[ERROR] Vulnerability found: Formatted SQL queries are vulnerable to injection (python:S3649)"
-                    echo "[ERROR] user_auth.py: Line 9 - 'Make sure that formatting this SQL query is safe here.'"
-                    echo "[INFO] ------------------------------------------------------------------------"
-                    echo "[INFO] EXECUTION FAILURE"
-                    echo "[INFO] ------------------------------------------------------------------------"
-                    echo "[ERROR] QUALITY GATE STATUS: FAILED"
-                    exit 1
-                fi
-                '''
+                script {
+                    echo 'Initializing SonarScanner...'
+                    // We check for the secure parameterized query (?)
+                    def isSecure = sh(script: 'grep -q "WHERE username = ?" user_auth.py', returnStatus: true) == 0
+                    
+                    if (isSecure) {
+                        echo "[INFO] 0 Critical Vulnerabilities found."
+                        echo "[INFO] QUALITY GATE STATUS: PASSED"
+                        env.NEEDS_REMEDIATION = "false"
+                    } else {
+                        echo "[ERROR] Vulnerability found: Formatted SQL queries are vulnerable to injection (python:S3649)"
+                        echo "[ERROR] QUALITY GATE STATUS: FAILED"
+                        env.NEEDS_REMEDIATION = "true"
+                        // We intentionally don't exit 1 here so the pipeline can self-heal
+                    }
+                }
+            }
+        }
+        
+        stage('ARM Autonomous Remediation') {
+            when { 
+                environment name: 'NEEDS_REMEDIATION', value: 'true' 
+            }
+            steps {
+                echo '>>> TRIGGERING AUTONOMOUS AI AGENT <<<'
+                sh 'python3 run_arm_agent.py'
+            }
+        }
+        
+        stage('SonarQube Re-Scan') {
+            when { 
+                environment name: 'NEEDS_REMEDIATION', value: 'true' 
+            }
+            steps {
+                script {
+                    echo 'Re-running SonarScanner on patched code...'
+                    def isSecureNow = sh(script: 'grep -q "WHERE username = ?" user_auth.py', returnStatus: true) == 0
+                    
+                    if (isSecureNow) {
+                        echo "[INFO] 0 Critical Vulnerabilities found."
+                        echo "[INFO] QUALITY GATE STATUS: PASSED"
+                    } else {
+                        echo "[ERROR] Patch failed. QUALITY GATE STATUS: FAILED"
+                        exit 1
+                    }
+                }
             }
         }
         
