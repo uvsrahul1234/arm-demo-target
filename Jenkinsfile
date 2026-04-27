@@ -9,36 +9,31 @@ pipeline {
             }
         }
         
-        stage('Security & Regression Testing (Pytest)') {
+        stage('SonarQube Security Scan') {
             steps {
-                echo 'Running automated test suite...'
+                echo 'Initializing SonarScanner...'
                 sh '''
-                # We use grep to check if the AI has fixed the code yet
-                if grep -q "float(fee_string)" math_utils.py; then
-                    echo "============================= test session starts =============================="
-                    echo "platform linux -- Python 3.10.12, pytest-7.4.0"
-                    echo "collected 1 item"
-                    echo ""
-                    echo "test_math_utils.py .                                                     [100%]"
-                    echo ""
-                    echo "============================== 1 passed in 0.01s ==============================="
+                # Check if the AI has applied the parameterized query fix (?)
+                if grep -q "WHERE username = ?" user_auth.py; then
+                    echo "[INFO] Analyzing user_auth.py..."
+                    echo "[INFO] Sensor Python Sensor [python]"
+                    echo "[INFO] 1 source file to be analyzed"
+                    echo "[INFO] 0 Critical Vulnerabilities found."
+                    echo "[INFO] ------------------------------------------------------------------------"
+                    echo "[INFO] EXECUTION SUCCESS"
+                    echo "[INFO] ------------------------------------------------------------------------"
+                    echo "[INFO] QUALITY GATE STATUS: PASSED"
                     exit 0
                 else
-                    echo "============================= test session starts =============================="
-                    echo "platform linux -- Python 3.10.12, pytest-7.4.0"
-                    echo "collected 1 item"
-                    echo ""
-                    echo "test_math_utils.py F                                                     [100%]"
-                    echo ""
-                    echo "=================================== FAILURES ==================================="
-                    echo "_____________________________ test_process_payment _____________________________"
-                    echo ""
-                    echo "    def test_process_payment():"
-                    echo ">       assert process_payment(100.0, '5.50') == 105.50"
-                    echo "E       TypeError: unsupported operand type(s) for +: 'float' and 'str'"
-                    echo ""
-                    echo "test_math_utils.py:5: TypeError"
-                    echo "=========================== 1 failed in 0.03s ============================"
+                    echo "[INFO] Analyzing user_auth.py..."
+                    echo "[INFO] Sensor Python Sensor [python]"
+                    echo "[INFO] 1 source file to be analyzed"
+                    echo "[ERROR] Vulnerability found: Formatted SQL queries are vulnerable to injection (python:S3649)"
+                    echo "[ERROR] user_auth.py: Line 9 - 'Make sure that formatting this SQL query is safe here.'"
+                    echo "[INFO] ------------------------------------------------------------------------"
+                    echo "[INFO] EXECUTION FAILURE"
+                    echo "[INFO] ------------------------------------------------------------------------"
+                    echo "[ERROR] QUALITY GATE STATUS: FAILED"
                     exit 1
                 fi
                 '''
@@ -47,7 +42,7 @@ pipeline {
         
         stage('Deploy to Production') {
             steps {
-                echo 'Vulnerability check passed. Deploying...'
+                echo 'Security clearance granted. Deploying...'
             }
         }
     }
